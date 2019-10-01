@@ -5,19 +5,19 @@
 
 #include <poll.h>
 #include <assert.h>
+#include <errno.h>
 
 Poller::Poller(EventLoop *loop)
     : ownerLoop_(loop)
 {
 }
 
-Poller::~Poller()
-{
-}
+Poller::~Poller() = default;
 
 Timestamp Poller::poll(int timeoutMs, ChannelList *activeChannels)
 {
     int numEvents = ::poll(&*pollfds_.begin(), pollfds_.size(), timeoutMs);
+    int savedErrno = errno;
     Timestamp now(Timestamp::now());
     if (numEvents > 0)
     {
@@ -41,7 +41,9 @@ void Poller::fillActiveChannels(int numEvents, ChannelList *activeChannels) cons
         {
             --numEvents;
             ChannelMap::const_iterator ch = channels_.find(pfd->fd);
+            assert(ch != channels_.end());
             Channel *channel = ch->second;
+            assert(channel->fd() == pfd->fd);
             channel->set_revents(pfd->revents);
             activeChannels->push_back(channel);
         }
@@ -109,4 +111,10 @@ void Poller::removeChannel(Channel *channel)
         channels_[channelAtEnd]->set_index(idx);
         pollfds_.pop_back();
     }
+}
+
+bool Poller::hasChannel(Channel *channel) const{
+    assertInLoopThread();
+    ChannelMap::const_iterator it = channels_.find(channel->fd());
+    return it != channels_.end() && it->second == channel;
 }

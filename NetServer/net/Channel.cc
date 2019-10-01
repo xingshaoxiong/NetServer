@@ -2,7 +2,10 @@
 #include "NetServer/net/Channel.h"
 #include "NetServer/net/EventLoop.h"
 
+#include <sstream>
+
 #include <poll.h>
+#include <assert.h>
 
 const int Channel::kNoneEvent = 0;
 const int Channel::kReadEvent = POLLIN | POLLPRI;
@@ -13,17 +16,69 @@ Channel::Channel(EventLoop *loop, int fd__)
       fd_(fd__),
       events_(0),
       revents_(0),
-      index_(-1)
+      index_(-1),
+      logHub_(true),
+      tied_(false),
+      eventHandling_(false),
+      addedToLoop_(false)
 {
+}
+
+Channel::~Channel()
+{
+    assert(!eventHandling_);
+    assert(!addedToLoop_);
+    if (loop_->isInLoopThread())
+    {
+        assert(!loop_->hasChannel(this));
+    }
+}
+
+void Channel::tie(const std::shared_ptr<void> &obj)
+{
+    tie_ = obj;
 }
 
 void Channel::update()
 {
+    addedToLoop_ = true;
     loop_->updateChannel(this);
 }
 
-void Channel::handleEvent()
+void Channel::remove()
 {
+    assert(isNoneEvent());
+    addedToLoop_ = false;
+    loop_->removeChannel(this);
+}
+
+void Channel::handleEvent(Timestamp receiveTime)
+{
+    std::shared_ptr<void> gurad;
+    if (tied_)
+    {
+        gurad = tie_.lock();
+        if (gurad)
+        {
+            handleEventWithGuard(receiveTime);
+        }
+    }
+    else
+    {
+        handleEventWithGuard(receiveTime);
+    }
+}
+
+void Channel::handleEventWithGuard(Timestamp receiveTime)
+{
+    eventHandling_ = true;
+    if ((revents_ & POLLHUP) && !(revents_ & POLLIN))
+    {
+        if (closeCallback_)
+        {
+            closeCallback_();
+        }
+    }
     if (revents_ & POLLNVAL)
     {
     }
@@ -38,7 +93,7 @@ void Channel::handleEvent()
     {
         if (readCallback_)
         {
-            readCallback_();
+            readCallback_(receiveTime);
         }
     }
     if (revents_ & POLLOUT)
@@ -48,4 +103,27 @@ void Channel::handleEvent()
             writeCallback_();
         }
     }
+    eventHandling_ = false;
+}
+
+std::string Channel::eventsToString(int fd, int ev)
+{
+    std::ostringstream oss;
+    oss << fd << ": ";
+    if (ev & POLLIN)
+        oss << "IN ";
+    if (ev & POLLPRI)
+        oss << "PRI ";
+    if (ev & POLLOUT)
+        oss << "OUT ";
+    if (ev & POLLHUP)
+        oss << "HUP ";
+    if (ev & POLLRDHUP)
+        oss << "RDHUP ";
+    if (ev & POLLERR)
+        oss << "ERR ";
+    if (ev & POLLNVAL)
+        oss << "NVAL ";
+
+    return oss.str();
 }

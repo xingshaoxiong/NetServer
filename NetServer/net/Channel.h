@@ -11,22 +11,31 @@ class Channel : noncopyable
 {
 public:
     typedef std::function<void()> EventCallback;
+    typedef std::function<void(Timestamp)> ReadEventCallback;
     Channel(EventLoop *loop, int fd);
-    void handleEvent();
-    void setReadCallback(const EventCallback &cb)
+    ~Channel();
+    void handleEvent(Timestamp receiveTime);
+    void setReadCallback(const ReadEventCallback &cb)
     {
-        readCallback_ = cb;
+        readCallback_ = std::move(cb);
     }
 
     void setWriteCallback(const EventCallback &cb)
     {
-        writeCallback_ = cb;
+        writeCallback_ = std::move(cb);
+    }
+
+    void setCloseCallback(EventCallback cb)
+    {
+        closeCallback_ = std::move(cb);
     }
 
     void setErrorCallback(const EventCallback &cb)
     {
-        errorCallback_ = cb;
+        errorCallback_ = std::move(cb);
     }
+
+    void tie(const std::shared_ptr<void> &);
 
     int fd() const
     {
@@ -60,6 +69,19 @@ public:
         update();
     }
 
+    void disableWriting()
+    {
+        events_ &= ~kWriteEvent;
+        update();
+    }
+    void disableAll()
+    {
+        events_ = kNoneEvent;
+        update();
+    }
+    bool isWriting() const { return events_ & kWriteEvent; }
+    bool isReading() const { return events_ & kReadEvent; }
+
     int index()
     {
         return index_;
@@ -75,8 +97,14 @@ public:
         return loop_;
     }
 
+    void remove();
+
 private:
+    static std::string eventsToString(int fd, int ev);
+
     void update();
+
+    void handleEventWithGuard(Timestamp receiveTime);
 
     static const int kNoneEvent;
     static const int kReadEvent;
@@ -87,8 +115,14 @@ private:
     int events_;
     int revents_;
     int index_;
+    bool logHub_;
 
-    EventCallback readCallback_;
+    std::weak_ptr<void> tie_;
+    bool tied_;
+    bool eventHandling_;
+    bool addedToLoop_;
+    ReadEventCallback readCallback_;
     EventCallback writeCallback_;
+    EventCallback closeCallback_;
     EventCallback errorCallback_;
 };

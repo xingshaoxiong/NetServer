@@ -20,7 +20,11 @@ public:
 
     void removeChannel(Channel *channel);
 
-    void assertInLoopThread()
+    bool hasChannel(Channel *channel) const;
+
+    static Poller *newDefaultPoller(EventLoop *loop);
+
+    void assertInLoopThread() const
     {
         ownerLoop_->assertInLoopThread();
     }
