@@ -12,6 +12,7 @@
 #include "NetServer/base/Timestamp.h"
 #include "NetServer/net/Poller.h"
 #include "NetServer/net/TimerId.h"
+#include "NetServer/net/Callbacks.h"
 
 class Channel;
 class Poller;

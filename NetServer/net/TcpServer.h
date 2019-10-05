@@ -37,7 +37,7 @@ public:
     {
         threadInitCallback_ = cb;
     }
-    std::shared_ptr<EventLoopThreadPoll> threadPool()
+    std::shared_ptr<EventLoopThreadPool> threadPool()
     {
         return threadPool_;
     }
@@ -72,7 +72,7 @@ private:
     const string ipPort_;
     const string name_;
     std::unique_ptr<Acceptor> acceptor_;
-    std::shared_ptr<EventLoopThreadPoll> threadPool_;
+    std::shared_ptr<EventLoopThreadPool> threadPool_;
     ConnectionCallback connectionCallback_;
     MessageCallback messageCallback_;
     WriteCompleteCallback writeCompleteCallback_;
